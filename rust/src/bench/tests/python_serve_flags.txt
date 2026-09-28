@@ -83,6 +83,8 @@
 --seed
 --self-timed
 --served-model-name
+--sharegpt-max-prompt-len
+--sharegpt-max-total-len
 --sharegpt-output-len
 --skip-chat-template
 --skip-tokenizer-init

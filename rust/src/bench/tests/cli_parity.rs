@@ -33,6 +33,9 @@ const PYTHON_ONLY: &[&str] = &[
     // blazedit dataset
     "--blazedit-max-distance",
     "--blazedit-min-distance",
+    // sharegpt dataset (vllm-bench hardcodes 1024/2048)
+    "--sharegpt-max-prompt-len",
+    "--sharegpt-max-total-len",
     // spec_bench dataset
     "--spec-bench-category",
     "--spec-bench-output-len",

@@ -1395,6 +1395,8 @@ class ShareGPTDataset(BenchmarkDataset):
         output_len: int | None = None,
         enable_multimodal_chat: bool = False,
         lora_assignment: str = "random",
+        max_prompt_len: int = 1024,
+        max_total_len: int = 2048,
         **kwargs,
     ) -> list[SampleRequest]:
         assert self.data is not None, "Dataset must be loaded before sampling"
@@ -1423,6 +1425,8 @@ class ShareGPTDataset(BenchmarkDataset):
             if not is_valid_sequence(
                 prompt_len,
                 new_output_len,
+                max_prompt_len=max_prompt_len,
+                max_total_len=max_total_len,
                 skip_min_output_len_check=output_len is not None,
             ):
                 continue
@@ -1750,6 +1754,23 @@ def add_dataset_parser(parser: FlexibleArgumentParser):
         default=None,
         help="Output length for each request. Overrides the output length "
         "from the ShareGPT dataset.",
+    )
+    sharegpt_group.add_argument(
+        "--sharegpt-max-prompt-len",
+        type=int,
+        default=1024,
+        help="Skip ShareGPT requests whose prompt is longer than this many "
+        "tokens. Both this and --sharegpt-max-total-len apply: raising only "
+        "this limit still skips requests whose prompt + output is longer than "
+        "--sharegpt-max-total-len.",
+    )
+    sharegpt_group.add_argument(
+        "--sharegpt-max-total-len",
+        type=int,
+        default=2048,
+        help="Skip ShareGPT requests whose prompt + output is longer than this "
+        "many tokens. Both this and --sharegpt-max-prompt-len apply: a request "
+        "is kept only if it satisfies both limits.",
     )
 
     timed_trace_group = parser.add_argument_group("timed-trace dataset options")
@@ -2416,6 +2437,10 @@ def get_samples(
                 enable_multimodal_chat=args.enable_multimodal_chat,
                 request_id_prefix=args.request_id_prefix,
                 no_oversample=args.no_oversample,
+                # getattr: callers that build their own namespace (e.g.
+                # `vllm bench throughput`) do not define these flags.
+                max_prompt_len=getattr(args, "sharegpt_max_prompt_len", 1024),
+                max_total_len=getattr(args, "sharegpt_max_total_len", 2048),
             ),
             "burstgpt": lambda: BurstGPTDataset(
                 random_seed=args.seed,
