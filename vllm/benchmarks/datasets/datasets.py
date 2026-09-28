@@ -1356,6 +1356,12 @@ class ShareGPTDataset(BenchmarkDataset):
         random.seed(self.random_seed)
         if not getattr(self, "disable_shuffle", False):
             random.shuffle(self.data)
+        logger.info(
+            "ShareGPT dataset: each conversation contributes only its first "
+            "exchange as one independent request, so multi-turn prefix reuse "
+            "is not exercised. See docs/benchmarking/cli.md for multi-turn "
+            "options."
+        )
 
     def sample(
         self,

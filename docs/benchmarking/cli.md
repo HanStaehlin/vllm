@@ -120,6 +120,42 @@ P99 ITL (ms):                            8.39
     If cache reuse is not intended, vary `--seed`, reset or restart the server,
     or use `vllm bench sweep serve`, which resets server caches between runs.
 
+!!! note
+    The `sharegpt` dataset uses only the first exchange of each conversation
+    (`conversations[0]` as the prompt, `conversations[1]` as the reference
+    output) and sends it as one independent request. Later turns are ignored,
+    so it does not exercise multi-turn prefix reuse. For multi-turn
+    benchmarks, use one of:
+
+    - The Rust `vllm-bench` client (see `rust/src/bench/README.md`), which
+      `vllm bench serve` delegates to when `VLLM_USE_RUST_BENCH=1` is set.
+      `--multi-turn` requires `--backend openai-chat`:
+
+        ```bash
+        VLLM_USE_RUST_BENCH=1 vllm bench serve \
+          --backend openai-chat \
+          --model NousResearch/Hermes-3-Llama-3.1-8B \
+          --dataset-name sharegpt \
+          --dataset-path <your data path>/ShareGPT_V3_unfiltered_cleaned_split.json \
+          --multi-turn \
+          --num-prompts 50 \
+          --multi-turn-concurrency 10
+        ```
+
+    - The standalone benchmark in `benchmarks/multi_turn/` (see its
+      `README.md`). Convert ShareGPT to its input format first:
+
+        ```bash
+        cd benchmarks/multi_turn
+        python convert_sharegpt_to_openai.py \
+          sharegpt_20230401_clean_lang_split.json sharegpt_conv_128.json \
+          --seed=99 --max-items=128
+        python benchmark_serving_multi_turn.py \
+          --model NousResearch/Hermes-3-Llama-3.1-8B \
+          --input-file sharegpt_conv_128.json \
+          --num-clients 2 --max-active-conversations 6
+        ```
+
 #### Understanding the Latency Metrics
 
 `vllm bench serve` measures latency at the benchmark client:
