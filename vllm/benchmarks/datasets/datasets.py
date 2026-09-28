@@ -1332,9 +1332,36 @@ class RandomMultiModalDataset(RandomDataset):
 # -----------------------------------------------------------------------------
 
 
+SHAREGPT_USER_ROLES = frozenset({"human", "user"})
+SHAREGPT_ASSISTANT_ROLES = frozenset({"gpt", "chatgpt", "bing", "bard", "assistant"})
+
+
+def _sharegpt_first_user_assistant_pair(
+    conversations: list[dict[str, Any]],
+) -> tuple[str, str] | None:
+    """Return the first (user, assistant) exchange of a ShareGPT conversation.
+
+    ShareGPT splits long conversations into parts, so a part can open with an
+    assistant turn (or a system turn). Pairing by position would then use an
+    assistant reply as the prompt. Instead, pick the first user turn that is
+    directly followed by an assistant turn. Returns None if there is none.
+    """
+    for turn, next_turn in zip(conversations, conversations[1:]):
+        if (
+            str(turn.get("from", "")).lower() in SHAREGPT_USER_ROLES
+            and str(next_turn.get("from", "")).lower() in SHAREGPT_ASSISTANT_ROLES
+        ):
+            return turn["value"], next_turn["value"]
+    return None
+
+
 class ShareGPTDataset(BenchmarkDataset):
     """Implements the ShareGPT dataset.  Loads data from a JSON file and generates
     sample requests based on conversation turns.
+
+    Each conversation contributes one request: its first user turn that is
+    directly followed by an assistant turn. Conversations without such a pair
+    are skipped.
     """
 
     def __init__(self, **kwargs) -> None:
@@ -1373,13 +1400,15 @@ class ShareGPTDataset(BenchmarkDataset):
         assert self.data is not None, "Dataset must be loaded before sampling"
         samples: list[SampleRequest] = []
         ind = 0
+        num_no_pair = 0
         for entry in self.data:
             if len(samples) >= num_requests:
                 break
-            prompt, completion = (
-                entry["conversations"][0]["value"],
-                entry["conversations"][1]["value"],
-            )
+            pair = _sharegpt_first_user_assistant_pair(entry["conversations"])
+            if pair is None:
+                num_no_pair += 1
+                continue
+            prompt, completion = pair
 
             lora_request = self.get_lora_request(
                 index=ind,
@@ -1416,6 +1445,13 @@ class ShareGPTDataset(BenchmarkDataset):
                 )
             )
             ind += 1
+        self.num_skipped_no_pair = num_no_pair
+        if num_no_pair:
+            logger.info(
+                "ShareGPT: skipped %d conversations without a user turn "
+                "directly followed by an assistant turn.",
+                num_no_pair,
+            )
         self.maybe_oversample_requests(
             samples, num_requests, request_id_prefix, no_oversample
         )
